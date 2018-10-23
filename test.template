@@ -172,7 +172,7 @@
             "UpdatePolicy":{
                 "AutoScalingRollingUpdate":{
                     "MinInstancesInService":"2",
-                    "MaxBatchSize":"1",
+                    "MaxBatchSize":"2",
                     "PauseTime":"PT0H2M0S"
                 }
             },
@@ -195,7 +195,7 @@
                 "LaunchConfigurationName":{
                     "Ref":"LaunchConfiguration"
                 },
-                "MaxSize":"2",
+                "MaxSize":"4",
                 "MinSize":"1",
                 "DesiredCapacity":"1",
                 "HealthCheckGracePeriod":"420",
@@ -354,7 +354,7 @@
                     "Ref":"AutoScalingGroup"
                 },
                 "AdjustmentType":"ChangeInCapacity",
-                "ScalingAdjustment":"1",
+                "ScalingAdjustment":"2",
                 "Cooldown":"60"
             }
         },
