@@ -6,7 +6,7 @@ sudo apt-get install git-core -y
 
 sudo apt-get install postgresql-9.5-client
 
-
+sudo apt-get install links -y
 
 cd /var/canvas
 
