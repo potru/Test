@@ -1,0 +1,440 @@
+{
+    "AWSTemplateFormatVersion":"2010-09-09",
+    "Description":"NewLexis canvas devlsp-apache stack",
+    "Outputs":{
+        "ELBEndPoint":{
+            "Description":"devlsp - apache ELB Endpoint",
+            "Value":{
+                "Fn::GetAtt":[
+                    "ElasticLoadBalancer",
+                    "DNSName"
+                ]
+            }
+        },
+        "ElasticLoadBalancer":{
+            "Description":"devlsp - apache ElasticLoadBalancer",
+            "Value":{
+                "Ref":"ElasticLoadBalancer"
+            }
+        },
+        "Route53EndPoint":{
+            "Description":"canvasapp Route53 Endpoint",
+            "Value":"canvasapp2.route53.lexis.com"
+        },
+        "HTTPRoute53EndPoint":{
+            "Description":"canvasapp Route53 Endpoint",
+            "Value":"http://canvasapp.route53.lexis.com"
+        },
+        "AutoScalingGroup":{
+            "Description":"devlsp - apache AutoScalingGroup",
+            "Value":{
+                "Ref":"AutoScalingGroup"
+            }
+        }
+    },
+    "Parameters":{},
+	
+    "Resources":{
+        "LaunchConfiguration":{
+            "Type":"AWS::AutoScaling::LaunchConfiguration",
+            "Properties":{
+                "BlockDeviceMappings":[
+                    {
+                        "DeviceName":"/dev/sda1",
+                        "Ebs":{
+                            "DeleteOnTermination":"true",
+                            "VolumeSize":"100",
+                            "VolumeType":"gp2"
+                        }
+                    }
+                ],
+                "ImageId":"ami-04e0614fa6fd128c7",
+                "IamInstanceProfile":"canvas-devlsp-iam-InstanceProfile-NLR0P0SVM8ZZ",
+                "InstanceMonitoring":"True",
+                "AssociatePublicIpAddress":"False",
+                "InstanceType":"m4.xlarge",
+                "KeyName":"product-nl-dev",
+                "SecurityGroups":[
+                    "sg-91aebce1",
+                    "sg-ff59448f",
+                    "sg-4bba223e"
+                ],
+                "UserData": {
+                "Fn::Base64": {
+                    "Fn::Join": [
+                        "",
+                        [
+                            "#!/bin/bash\n",
+                            "sudo apt-get update -y\n",
+							"sudo apt-get install links -y\n",
+							"sudo apt-get install git-core -y\n",
+							"sudo apt-get install awscli -y\n",
+							"sudo apt-get install wget -y\n",
+              "sudo git clone https://github.com/potru/Test.git /home/ubuntu\n",
+              "cd /home/ubuntu/Test\n",
+              "sudo mv canvas2 /var/canvas\n",
+              "sudo chmod +x test.sh\n",
+							"sudo apt-get install dos2unix -y\n",
+							"sudo dos2unix /home/ubuntu/test.sh\n",
+							"sudo chmod +x /home/ubuntu/test.sh\n",
+							"cd /home/ubuntu/Test\n",
+							"sudo ./test.sh\n",				
+							"sudo sh -c \"echo \\\"root ALL= NOPASSWD: ALL\\\" >> /etc/sudoers\"\n",
+							"sudo sh -c \"echo \\\"ubuntu ALL= NOPASSWD: ALL\\\" >> /etc/sudoers\"\n",
+							"sudo sh -c \"echo \\\"jenkins ALL= NOPASSWD: ALL\\\" >> /etc/sudoers\"\n"
+																
+                        ]
+                    ]
+                }
+            }
+            },
+            "Metadata":{
+                "AWS::CloudFormation::Init":{
+                    "config":{
+                        "files":{
+                            "/etc/hosts":{
+                                "content":{
+                                    "Fn::Join":[
+                                        "",
+                                        [
+                                            "127.0.0.1   localhost localhost.localdomain\n",
+                                            "138.12.82.102   dvc7698\n"
+                                        ]
+                                    ]
+                                },
+                                "mode":"000644",
+                                "owner":"root",
+                                "group":"root"
+                            },
+                            "/etc/cfn/hooks.d/cfn-auto-reloader.conf":{
+                                "content":{
+                                    "Fn::Join":[
+                                        "",
+                                        [
+                                            "[cfn-auto-reloader-hook]\n",
+                                            "triggers=post.update\n",
+                                            "path=Resources.LaunchConfiguration.Metadata.AWS::CloudFormation::Init\n",
+                                            "action=/opt/aws/bin/cfn-init -s ",
+                                            {
+                                                "Ref":"AWS::StackId"
+                                            },
+                                            " -r LaunchConfiguration ",
+                                            " --region ",
+                                            {
+                                                "Ref":"AWS::Region"
+                                            },
+                                            "\n",
+                                            "runas=root\n"
+                                        ]
+                                    ]
+                                }
+                            }
+                        },
+                        "commands":{
+                            "100.installApache":{
+                                "command":"yum install httpd24 mysql -y",
+                                "ignoreErrors":"false"
+                            },
+                            "200.createHbeat":{
+                                "command":"echo 'Hello' > /var/www/html/heartbeat.html; chmod 444 /var/www/html/heartbeat.html",
+                                "ignoreErrors":"false"
+                            },
+                            "300.createIndex":{
+                                "command":"echo '<html><body><h1>Hello world from apache</h1></body></html>' > /var/www/html/index.html; chmod 444 /var/www/html/index.html",
+                                "ignoreErrors":"false"
+                            },
+                            "400.startService":{
+                                "command":"service httpd start",
+                                "ignoreErrors":"false"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "WaitConditionHandle":{
+            "Type":"AWS::CloudFormation::WaitConditionHandle"
+        },
+        "WaitCondition":{
+            "Type":"AWS::CloudFormation::WaitCondition",
+            "DependsOn":"AutoScalingGroup",
+            "Properties":{
+                "Count":"0",
+                "Handle":{
+                    "Ref":"WaitConditionHandle"
+                },
+                "Timeout":"600"
+            }
+        },
+        "AutoScalingGroup":{
+            "Type":"AWS::AutoScaling::AutoScalingGroup",
+            "UpdatePolicy":{
+                "AutoScalingRollingUpdate":{
+                    "MinInstancesInService":"2",
+                    "MaxBatchSize":"1",
+                    "PauseTime":"PT0H2M0S"
+                }
+            },
+            "Properties":{
+                "LoadBalancerNames":[
+                    {
+                        "Ref":"ElasticLoadBalancer"
+                    }
+                ],
+                "AvailabilityZones":[
+                    "us-east-1a",
+                    "us-east-1c",
+                    "us-east-1d"
+                ],
+                "VPCZoneIdentifier":[
+                    "subnet-e90ee8a2",
+                    "subnet-3c6fb358",
+                    "subnet-db5171f7"
+                ],
+                "LaunchConfigurationName":{
+                    "Ref":"LaunchConfiguration"
+                },
+                "MaxSize":"2",
+                "MinSize":"1",
+                "DesiredCapacity":"1",
+                "HealthCheckGracePeriod":"420",
+                "HealthCheckType":"EC2",
+                "MetricsCollection":[
+                    {
+                        "Granularity":"1Minute"
+                    }
+                ],
+                "Tags":[
+                    {
+                        "Key":"AssetName",
+                        "Value":"devlsp",
+                        "PropagateAtLaunch":"true"
+                    },
+                    {
+                        "Key":"AssetAreaName",
+                        "Value":"apache",
+                        "PropagateAtLaunch":"true"
+                    },
+                    {
+                        "Key":"AssetPurpose",
+                        "Value":"Demonstrate usage of CF generator",
+                        "PropagateAtLaunch":"true"
+                    },
+                    {
+                        "Key":"Purpose",
+                        "Value":"devlsp:apache AutoScalingGroup",
+                        "PropagateAtLaunch":"true"
+                    },
+                    {
+                        "Key":"Name",
+                        "Value":"canvas:devlsp:apache",
+                        "PropagateAtLaunch":"true"
+                    },
+                    {
+                        "Key":"AssetGroup",
+                        "Value":"canvas",
+                        "PropagateAtLaunch":"true"
+                    },
+                    {
+                        "Key":"ScaleInProtection",
+                        "Value":"enabled",
+                        "PropagateAtLaunch":"true"
+                    },
+                    {
+                        "Key":"DeploymentDirectory",
+                        "Value":"apache",
+                        "PropagateAtLaunch":"true"
+                    }
+                ]
+            }
+        },
+        "ElasticLoadBalancer":{
+            "Type":"AWS::ElasticLoadBalancing::LoadBalancer",
+            "Properties":{
+                "Scheme":"internet-facing",
+                "HealthCheck":{
+                    "Target":"TCP:3000",
+                    "HealthyThreshold":"10",
+                    "Interval":"10",
+                    "Timeout":"5",
+                    "UnhealthyThreshold":"10"
+                },
+                "ConnectionDrainingPolicy":{
+                    "Enabled":"true",
+                    "Timeout":"60"
+                },
+                "ConnectionSettings":{
+                    "IdleTimeout":"60"
+                },
+                "CrossZone":"true",
+                "AccessLoggingPolicy":{
+                    "S3BucketName":"ln-elb-log",
+                    "Enabled":"true",
+                    "EmitInterval":"5"
+                },
+                "Listeners":[
+                    {
+                        "InstancePort":"443",
+                        "Protocol":"HTTPS",
+                        "LoadBalancerPort":"443",
+                        "InstanceProtocol":"HTTPS",
+                        "SSLCertificateId":{
+                            "Fn::Join":[
+                                "",
+                                [
+                                    "arn:aws:acm:us-east-1:",
+                                    {
+                                        "Ref":"AWS::AccountId"
+                                    },
+                                    ":certificate/d305e386-6e33-4171-a41f-fa896a2d5caf"
+                                ]
+                            ]
+                        }
+                    },
+                    {
+                        "InstancePort":"80",
+                        "Protocol":"TCP",
+                        "LoadBalancerPort":"3000"
+                    },
+                    {
+                        "InstancePort":"80",
+                        "Protocol":"HTTP",
+                        "LoadBalancerPort":"80"
+                    }
+                ],
+                "Subnets":[
+                    "subnet-4e0fe905",
+                    "subnet-a89f40cc",
+                    "subnet-a8496984"
+                ],
+                "SecurityGroups":[
+                    "sg-8cbc24f9"
+                ],
+                "Tags":[
+                    {
+                        "Key":"AssetID",
+                        "Value":"1914"
+                    },
+                    {
+                        "Key":"AssetPurpose",
+                        "Value":"Demonstrate usage of CF generator"
+                    },
+                    {
+                        "Key":"AssetName",
+                        "Value":"devlsp"
+                    },
+                    {
+                        "Key":"AssetAreaName",
+                        "Value":"apache"
+                    },
+                    {
+                        "Key":"Purpose",
+                        "Value":"devlsp:apache ElasticLoadBalancer"
+                    },
+                    {
+                        "Key":"Name",
+                        "Value":"canvas:devlsp:apache"
+                    },
+                    {
+                        "Key":"Stage",
+                        "Value":"canvas"
+                    },
+                    {
+                        "Key":"AssetGroup",
+                        "Value":"canvas"
+                    }
+                ]
+            }
+        },
+        "ScalingPolicyServiceScaleUp":{
+            "Type":"AWS::AutoScaling::ScalingPolicy",
+            "Properties":{
+                "AutoScalingGroupName":{
+                    "Ref":"AutoScalingGroup"
+                },
+                "AdjustmentType":"ChangeInCapacity",
+                "ScalingAdjustment":"1",
+                "Cooldown":"60"
+            }
+        },
+        "ScalingPolicyServiceScaleDown":{
+            "Type":"AWS::AutoScaling::ScalingPolicy",
+            "Properties":{
+                "AutoScalingGroupName":{
+                    "Ref":"AutoScalingGroup"
+                },
+                "AdjustmentType":"ChangeInCapacity",
+                "ScalingAdjustment":"-1",
+                "Cooldown":"60"
+            }
+        },
+        "AutoScalingGroupCPULowScalingPolicyServiceScaleDown":{
+            "Type":"AWS::CloudWatch::Alarm",
+            "Properties":{
+                "EvaluationPeriods":"3",
+                "Statistic":"Average",
+                "Threshold":"50",
+                "AlarmDescription":"Alarm if average threshold value is less than 50 for 3 consecutive minutes",
+                "Period":"60",
+                "AlarmActions":[
+                    {
+                        "Ref":"ScalingPolicyServiceScaleDown"
+                    }
+                ],
+                "Namespace":"AWS/EC2",
+                "Dimensions":[
+                    {
+                        "Name":"AutoScalingGroupName",
+                        "Value":{
+                            "Ref":"AutoScalingGroup"
+                        }
+                    }
+                ],
+                "ComparisonOperator":"LessThanThreshold",
+                "MetricName":"CPUUtilization"
+            }
+        },
+        "AutoScalingGroupCPUHighScalingPolicyServiceScaleUp":{
+            "Type":"AWS::CloudWatch::Alarm",
+            "Properties":{
+                "EvaluationPeriods":"3",
+                "Statistic":"Average",
+                "Threshold":"90",
+                "AlarmDescription":"Alarm if average Threshold value is greater than 90 for 3 consecutive minutes",
+                "Period":"60",
+                "AlarmActions":[
+                    {
+                        "Ref":"ScalingPolicyServiceScaleUp"
+                    }
+                ],
+                "Namespace":"AWS/EC2",
+                "Dimensions":[
+                    {
+                        "Name":"AutoScalingGroupName",
+                        "Value":{
+                            "Ref":"AutoScalingGroup"
+                        }
+                    }
+                ],
+                "ComparisonOperator":"GreaterThanThreshold",
+                "MetricName":"CPUUtilization"
+            }
+        },
+        "Route53ElbEntry":{
+            "Type":"Custom::Route53ELBAliasRecord",
+            "Version":"1.0",
+            "DependsOn":"WaitCondition",
+            "Properties":{
+                "ServiceToken":"arn:aws:lambda:us-east-1:926537199218:function:updateRoute53RecordSet",
+                "AliasTarget":{
+                    "Fn::GetAtt":[
+                        "ElasticLoadBalancer",
+                        "DNSName"
+                    ]
+                },
+                "AliasRecord":"canvasapp2.route53.lexis.com",
+                "AliasComment":"Route53 Alias Entry for apache ELB"
+            }
+        }
+    }
+}
